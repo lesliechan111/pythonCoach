@@ -13,7 +13,14 @@ def seed():
 
     from app.seed.data.courses import COURSE, LESSONS
     from app.seed.data.exercises import ALL_EXERCISES
+    from app.seed.data.grading_updates import (
+        apply_exercise_updates,
+        apply_project_task_updates,
+    )
     from app.seed.data.projects import ALL_PROJECTS
+
+    all_exercises = apply_exercise_updates(ALL_EXERCISES)
+    all_projects = apply_project_task_updates(ALL_PROJECTS)
 
     with Session(engine) as session:
         # Check if already seeded
@@ -53,7 +60,7 @@ def seed():
             session.flush()
 
             # 3. Create exercises for each lesson
-            lesson_exercises = ALL_EXERCISES.get(i + 1, [])
+            lesson_exercises = all_exercises.get(i + 1, [])
             for ex_data in lesson_exercises:
                 exercise = Exercise(
                     lesson_id=lesson.id,
@@ -83,7 +90,7 @@ def seed():
                 session.add(exercise)
 
         # 4. Create project
-        for proj_id, (proj_data, tasks_data) in ALL_PROJECTS.items():
+        for proj_id, (proj_data, tasks_data) in all_projects.items():
             project = Project(
                 knowledge_points=json.dumps(
                     proj_data["knowledge_points"], ensure_ascii=False
