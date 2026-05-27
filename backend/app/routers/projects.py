@@ -1,6 +1,4 @@
-import re
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -8,15 +6,15 @@ from app.database import get_session
 from app.models import Project, ProjectTask, CodeSubmission, UserProjectProgress
 from app.models.user import User
 from app.routers.auth import get_current_user
-from app.services.code_runner import run_python_code
+from app.services.code_grader import grade_code_against_cases, GradingConfigurationError
 
 router = APIRouter()
 
+TASK_PRIVATE_FIELDS = {"answer_code", "test_cases"}
 
-def _mock_stdin_for_code(code: str) -> str:
-    """生成模拟 stdin，数量等于代码中 input() 调用次数。"""
-    count = len(re.findall(r"\binput\s*\(", code or ""))
-    return "\n".join(["1"] * count) if count > 0 else ""
+
+def _public_task(task: ProjectTask) -> dict:
+    return task.model_dump(exclude=TASK_PRIVATE_FIELDS)
 
 
 class ProjectTaskSubmitRequest(BaseModel):
@@ -37,14 +35,14 @@ def get_project(project_id: int, session: Session = Depends(get_session)):
         return {"error": {"code": "NOT_FOUND", "message": "Project not found"}}
     tasks_stmt = select(ProjectTask).where(ProjectTask.project_id == project_id).order_by(ProjectTask.order_index)
     tasks = session.exec(tasks_stmt).all()
-    return {"data": {**project.dict(), "tasks": tasks}}
+    return {"data": {**project.model_dump(), "tasks": [_public_task(task) for task in tasks]}}
 
 
 @router.get("/projects/{project_id}/tasks")
 def list_project_tasks(project_id: int, session: Session = Depends(get_session)):
     stmt = select(ProjectTask).where(ProjectTask.project_id == project_id).order_by(ProjectTask.order_index)
     tasks = session.exec(stmt).all()
-    return {"data": tasks}
+    return {"data": [_public_task(task) for task in tasks]}
 
 
 @router.post("/project-tasks/{task_id}/submit")
@@ -58,24 +56,20 @@ def submit_project_task(
     if not task:
         return {"error": {"code": "NOT_FOUND", "message": "Task not found"}}
 
-    mock_stdin = _mock_stdin_for_code(task.answer_code or "")
-    user_result = run_python_code(req.code, stdin=mock_stdin)
-    expected_result = run_python_code(task.answer_code or "", stdin=mock_stdin)
+    try:
+        grade = grade_code_against_cases(req.code, task.test_cases, "任务完成！")
+    except GradingConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    is_correct = (
-        user_result.exit_code == 0
-        and expected_result.exit_code == 0
-        and user_result.stdout.strip() == expected_result.stdout.strip()
-    )
-
+    is_correct = grade["is_correct"]
     submission = CodeSubmission(
         user_id=current_user.id,
         project_task_id=task_id,
         code=req.code,
-        stdout=user_result.stdout,
-        stderr=user_result.stderr,
-        exit_code=user_result.exit_code,
-        execution_time_ms=user_result.execution_time_ms,
+        stdout=grade.get("run_output"),
+        stderr=grade.get("run_error"),
+        exit_code=0 if is_correct else 1,
+        execution_time_ms=0,
     )
     session.add(submission)
 
@@ -109,9 +103,9 @@ def submit_project_task(
     return {
         "data": {
             "is_correct": is_correct,
-            "stdout": user_result.stdout,
-            "stderr": user_result.stderr,
-            "exit_code": user_result.exit_code,
-            "execution_time_ms": user_result.execution_time_ms,
+            "stdout": grade.get("run_output") or "",
+            "stderr": grade.get("run_error") or "",
+            "exit_code": 0 if is_correct else 1,
+            "execution_time_ms": 0,
         }
     }
