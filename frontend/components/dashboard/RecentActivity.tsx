@@ -63,7 +63,7 @@ export function RecentActivity({ activities }: RecentActivityProps) {
                   <p className="text-sm font-medium truncate">{activity.title}</p>
                   <p className="text-xs text-muted-foreground">{activity.time}</p>
                 </div>
-                {ResultIcon && (
+                {ResultIcon && activity.result && (
                   <ResultIcon className={`h-4 w-4 shrink-0 ${resultColors[activity.result]}`} />
                 )}
               </motion.div>

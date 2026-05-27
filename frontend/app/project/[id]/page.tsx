@@ -30,7 +30,6 @@ interface TaskData {
   description: string;
   starter_code: string | null;
   hint: string | null;
-  answer_code: string | null;
   order_index: number;
 }
 
@@ -319,14 +318,14 @@ export default function ProjectDetailPage() {
                 height="300px"
                 showBorder={false}
               />
-              <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-2">
-                <div className="flex-1 flex items-center gap-2">
-                  <input
-                    type="text"
+              <div className="flex items-start justify-between border-t border-zinc-800 px-4 py-2">
+                <div className="flex-1 flex items-start gap-2">
+                  <textarea
                     value={stdin}
                     onChange={(e) => setStdin(e.target.value)}
-                    placeholder="标准输入 (每行一个 input)"
-                    className="flex-1 bg-zinc-800 text-xs text-zinc-300 px-2 py-1 rounded border border-zinc-700 focus:border-zinc-500 focus:outline-none font-mono"
+                    rows={3}
+                    placeholder={"标准输入（每个 input 一行）\n例如：小明\n18"}
+                    className="min-h-[4.5rem] flex-1 resize-y rounded border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-xs text-zinc-300 focus:border-zinc-500 focus:outline-none"
                   />
                 </div>
                 <div className="flex items-center gap-2">
