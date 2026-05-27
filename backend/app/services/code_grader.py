@@ -20,8 +20,14 @@ def load_test_cases(raw_cases):
         raise GradingConfigurationError("Code exercises require at least one test case.")
 
     for case in test_cases:
-        if not isinstance(case, dict) or "expected_output" not in case:
+        if not isinstance(case, dict):
+            raise GradingConfigurationError("Each test case must be an object.")
+        if "expected_output" not in case:
             raise GradingConfigurationError("Each test case must define expected_output.")
+        if not isinstance(case["expected_output"], str):
+            raise GradingConfigurationError("Each test case expected_output must be a string.")
+        if "stdin" in case and not isinstance(case["stdin"], str):
+            raise GradingConfigurationError("Each test case stdin must be a string when provided.")
 
     return test_cases
 

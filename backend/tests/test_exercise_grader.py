@@ -48,6 +48,34 @@ class ExerciseGraderTests(unittest.TestCase):
         with self.assertRaises(GradingConfigurationError):
             grade_exercise(item, user_code="print('hello')")
 
+    def test_code_exercise_rejects_non_string_expected_output_in_test_cases(self):
+        item = exercise(
+            type="programming",
+            answer="unused",
+            test_cases=json.dumps(
+                [
+                    {"stdin": "", "expected_output": 123},
+                ]
+            ),
+        )
+
+        with self.assertRaises(GradingConfigurationError):
+            grade_exercise(item, user_code="print('123')")
+
+    def test_code_exercise_rejects_non_string_stdin_in_test_cases(self):
+        item = exercise(
+            type="programming",
+            answer="unused",
+            test_cases=json.dumps(
+                [
+                    {"stdin": 123, "expected_output": "123\n"},
+                ]
+            ),
+        )
+
+        with self.assertRaises(GradingConfigurationError):
+            grade_exercise(item, user_code="print(input())")
+
     def test_code_exercise_checks_complete_submission_against_explicit_test_cases(self):
         item = exercise(
             type="code_completion",
