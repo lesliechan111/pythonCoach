@@ -30,11 +30,11 @@ def _docker_available() -> bool:
 
 
 def _run_docker(code: str, stdin: str, settings) -> RunResult:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
+    with tempfile.TemporaryDirectory() as run_dir:
+        temp_path = os.path.join(run_dir, "code.py")
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            handle.write(code)
 
-    try:
         args = [
             "docker", "run", "--rm",
             "--network", "none",
@@ -42,60 +42,61 @@ def _run_docker(code: str, stdin: str, settings) -> RunResult:
             f"--memory={settings.code_runner_memory_limit_mb}m",
             f"--cpus={settings.code_runner_cpu_limit}",
             "--pids-limit", "50",
+            "--tmpfs", "/work:rw,nosuid,size=1m",
+            "--workdir", "/work",
             "-v", f"{temp_path}:/sandbox/code.py:ro",
             settings.code_runner_image,
             "python3", "/sandbox/code.py",
         ]
 
-        proc = subprocess.run(
-            args,
-            input=stdin,
-            capture_output=True,
-            text=True,
-            timeout=settings.code_runner_timeout_seconds,
-        )
-        return RunResult(
-            stdout=proc.stdout,
-            stderr=proc.stderr,
-            exit_code=proc.returncode,
-            execution_time_ms=0,
-        )
-    except subprocess.TimeoutExpired:
-        return RunResult(
-            stdout="",
-            stderr="Error: Code execution timed out.",
-            exit_code=-1,
-            execution_time_ms=settings.code_runner_timeout_seconds * 1000,
-        )
-    finally:
-        os.unlink(temp_path)
+        try:
+            proc = subprocess.run(
+                args,
+                input=stdin,
+                capture_output=True,
+                text=True,
+                timeout=settings.code_runner_timeout_seconds,
+            )
+            return RunResult(
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                exit_code=proc.returncode,
+                execution_time_ms=0,
+            )
+        except subprocess.TimeoutExpired:
+            return RunResult(
+                stdout="",
+                stderr="Error: Code execution timed out.",
+                exit_code=-1,
+                execution_time_ms=settings.code_runner_timeout_seconds * 1000,
+            )
 
 
 def _run_subprocess(code: str, stdin: str, settings) -> RunResult:
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
+    with tempfile.TemporaryDirectory() as run_dir:
+        temp_path = os.path.join(run_dir, "code.py")
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            handle.write(code)
 
-    try:
-        proc = subprocess.run(
-            ["python3", temp_path],
-            input=stdin,
-            capture_output=True,
-            text=True,
-            timeout=settings.code_runner_timeout_seconds,
-        )
-        return RunResult(
-            stdout=proc.stdout,
-            stderr=proc.stderr,
-            exit_code=proc.returncode,
-            execution_time_ms=0,
-        )
-    except subprocess.TimeoutExpired:
-        return RunResult(
-            stdout="",
-            stderr="Error: Code execution timed out.",
-            exit_code=-1,
-            execution_time_ms=settings.code_runner_timeout_seconds * 1000,
-        )
-    finally:
-        os.unlink(temp_path)
+        try:
+            proc = subprocess.run(
+                ["python3", temp_path],
+                input=stdin,
+                capture_output=True,
+                text=True,
+                timeout=settings.code_runner_timeout_seconds,
+                cwd=run_dir,
+            )
+            return RunResult(
+                stdout=proc.stdout,
+                stderr=proc.stderr,
+                exit_code=proc.returncode,
+                execution_time_ms=0,
+            )
+        except subprocess.TimeoutExpired:
+            return RunResult(
+                stdout="",
+                stderr="Error: Code execution timed out.",
+                exit_code=-1,
+                execution_time_ms=settings.code_runner_timeout_seconds * 1000,
+            )
