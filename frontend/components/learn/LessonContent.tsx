@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, Lightbulb, AlertTriangle, Play } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Lightbulb, AlertTriangle, Play, Loader2 } from "lucide-react";
 import type { Lesson } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +84,28 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 export function LessonContent({ lesson, firstExerciseId }: LessonContentProps) {
+  const [exampleRunning, setExampleRunning] = useState(false);
+  const [exampleOutput, setExampleOutput] = useState<{ stdout: string; stderr: string } | null>(null);
+
+  const handleRunExample = async () => {
+    if (!lesson.example_code) return;
+    setExampleRunning(true);
+    setExampleOutput(null);
+    try {
+      const res = await fetch("/api/v1/code/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: "python", code: lesson.example_code }),
+      });
+      const json = await res.json();
+      setExampleOutput({ stdout: json.stdout || "", stderr: json.stderr || "" });
+    } catch {
+      setExampleOutput({ stdout: "", stderr: "运行失败" });
+    } finally {
+      setExampleRunning(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -138,10 +161,32 @@ export function LessonContent({ lesson, firstExerciseId }: LessonContentProps) {
             <pre className="code-block">
               <code>{lesson.example_code}</code>
             </pre>
-            <button className="absolute right-3 top-3 rounded bg-muted px-2 py-1 text-xs hover:bg-muted/80">
+            <button
+              onClick={handleRunExample}
+              disabled={exampleRunning}
+              className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded bg-muted px-2 py-1 text-xs hover:bg-muted/80 transition-colors disabled:opacity-50"
+            >
+              {exampleRunning ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
               运行示例
             </button>
           </div>
+          {exampleOutput && (
+            <div className="mt-3 rounded-lg border border-border bg-card p-3">
+              {exampleOutput.stdout && (
+                <pre className="font-mono text-sm text-emerald-400 overflow-x-auto whitespace-pre-wrap">{exampleOutput.stdout}</pre>
+              )}
+              {exampleOutput.stderr && (
+                <pre className="font-mono text-sm text-red-400 overflow-x-auto whitespace-pre-wrap">{exampleOutput.stderr}</pre>
+              )}
+              {!exampleOutput.stdout && !exampleOutput.stderr && (
+                <p className="text-xs text-muted-foreground">无输出</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -149,7 +194,7 @@ export function LessonContent({ lesson, firstExerciseId }: LessonContentProps) {
       {lesson.line_by_line_explanation && lesson.line_by_line_explanation.length > 0 && (
         <div>
           <h3 className="mb-3 font-semibold">逐行解释</h3>
-          <div className="overflow-hidden rounded-xl border border-border">
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>

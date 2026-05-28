@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { CodeEditor } from "@/components/ui/CodeEditor";
+import { Toast } from "@/components/ui/Toast";
 
 interface TaskData {
   id: number;
@@ -77,7 +78,14 @@ export default function ProjectDetailPage() {
   const [runResult, setRunResult] = useState<CodeRunResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
-  const [completedTasks, setCompletedTasks] = useState<Set<number>>(new Set());
+  const [completedTasks, setCompletedTasks] = useState<Set<number>>(() => {
+    if (typeof window === "undefined") return new Set<number>();
+    try {
+      const stored = sessionStorage.getItem(`completedTasks_${projectId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set<number>();
+    } catch { return new Set<number>(); }
+  });
+  const [toast, setToast] = useState<{ show: boolean; isCorrect: boolean; message: string }>({ show: false, isCorrect: false, message: "" });
 
   useEffect(() => {
     setLoading(true);
@@ -153,11 +161,17 @@ export default function ProjectDetailPage() {
       const json = await res.json();
       const data = json.data || json;
       setSubmitResult(data);
+      setToast({ show: true, isCorrect: data.is_correct, message: data.is_correct ? "任务完成！做得不错" : "还没通过，修改代码再试试" });
       if (data.is_correct) {
-        setCompletedTasks((prev) => new Set(prev).add(currentTask));
+        setCompletedTasks((prev) => {
+          const next = new Set(prev).add(currentTask);
+          sessionStorage.setItem(`completedTasks_${projectId}`, JSON.stringify(Array.from(next)));
+          return next;
+        });
       }
     } catch {
       setSubmitResult({ is_correct: false, stdout: "", stderr: "提交失败", exit_code: -1, execution_time_ms: 0 });
+      setToast({ show: true, isCorrect: false, message: "提交失败，请检查网络后重试。" });
     } finally {
       setSubmitting(false);
     }
@@ -275,7 +289,15 @@ export default function ProjectDetailPage() {
             animate={{ opacity: 1, x: 0 }}
             className="rounded-xl border border-border bg-card p-5"
           >
-            <h3 className="font-bold text-lg">{task.title}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-lg">{task.title}</h3>
+              {(completedTasks.has(currentTask) || submitResult?.is_correct) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                  <CheckCircle2 className="h-3 w-3" />
+                  已完成
+                </span>
+              )}
+            </div>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
               {task.description}
             </p>
@@ -318,7 +340,7 @@ export default function ProjectDetailPage() {
                 height="300px"
                 showBorder={false}
               />
-              <div className="flex items-start justify-between border-t border-zinc-800 px-4 py-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-start sm:justify-between gap-2 border-t border-zinc-800 px-4 py-2">
                 <div className="flex-1 flex items-start gap-2">
                   <textarea
                     value={stdin}
@@ -328,7 +350,7 @@ export default function ProjectDetailPage() {
                     className="min-h-[4.5rem] flex-1 resize-y rounded border border-zinc-700 bg-zinc-800 px-2 py-1 font-mono text-xs text-zinc-300 focus:border-zinc-500 focus:outline-none"
                   />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 justify-end">
                   <button
                     onClick={handleRun}
                     disabled={running || !code.trim()}
@@ -337,14 +359,22 @@ export default function ProjectDetailPage() {
                     {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                     运行
                   </button>
-                  {!submitResult?.is_correct && (
+                  {submitResult?.is_correct ? (
+                    <button
+                      disabled
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white"
+                    >
+                      <CheckCircle2 className="h-3 w-3" />
+                      已完成
+                    </button>
+                  ) : (
                     <button
                       onClick={handleSubmit}
                       disabled={submitting || !code.trim()}
                       className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
                     >
                       {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                      提交
+                      {submitResult && !submitResult.is_correct ? "重新提交" : "提交"}
                     </button>
                   )}
                 </div>
@@ -404,6 +434,14 @@ export default function ProjectDetailPage() {
               </div>
             </motion.div>
           )}
+
+          {/* Toast */}
+          <Toast
+            show={toast.show}
+            isCorrect={toast.isCorrect}
+            message={toast.message}
+            onClose={() => setToast({ show: false, isCorrect: false, message: "" })}
+          />
 
           {/* Next task button */}
           {submitResult?.is_correct && !isLastTask && (

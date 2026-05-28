@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { CodeEditor } from "@/components/ui/CodeEditor";
+import { Toast } from "@/components/ui/Toast";
 
 interface ExerciseData {
   id: number;
@@ -72,6 +73,15 @@ export default function ExercisePage() {
   const [showHint, setShowHint] = useState(false);
   const [exerciseIds, setExerciseIds] = useState<number[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [toast, setToast] = useState<{ show: boolean; isCorrect: boolean; message: string }>({ show: false, isCorrect: false, message: "" });
+  const [completedIds, setCompletedIds] = useState<Set<number>>(() => {
+    if (typeof window === "undefined") return new Set<number>();
+    try {
+      const stored = sessionStorage.getItem("completedExerciseIds");
+      return stored ? new Set(JSON.parse(stored)) : new Set<number>();
+    } catch { return new Set<number>(); }
+  });
+  const isCompleted = completedIds.has(id) || submitResult?.is_correct;
 
   useEffect(() => {
     setLoading(true);
@@ -97,6 +107,18 @@ export default function ExercisePage() {
         });
         if (CODE_TYPES.includes(d.type)) {
           setCode(d.starter_code || "");
+        }
+        // If already completed in this session, show completed state
+        let alreadyCompleted = false;
+        try {
+          const stored = sessionStorage.getItem("completedExerciseIds");
+          if (stored) {
+            const ids: number[] = JSON.parse(stored);
+            alreadyCompleted = ids.includes(id);
+          }
+        } catch {}
+        if (alreadyCompleted) {
+          setSubmitResult({ is_correct: true, score: 100, run_output: null, run_error: null, explanation: null });
         }
         // Fetch all exercises for this lesson for navigation
         return fetch(`/api/v1/lessons/${d.lesson_id}/exercises`);
@@ -162,13 +184,31 @@ export default function ExercisePage() {
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      setSubmitResult(json.data || json);
+      const data = json.data || json;
+      setSubmitResult(data);
+      setToast({ show: true, isCorrect: data.is_correct, message: data.explanation || "" });
+      if (data.is_correct) {
+        setCompletedIds((prev) => {
+          const next = new Set(prev).add(id);
+          sessionStorage.setItem("completedExerciseIds", JSON.stringify(Array.from(next)));
+          return next;
+        });
+      }
     } catch {
       setSubmitResult({ is_correct: false, score: 0, run_output: null, run_error: "提交失败", explanation: null });
+      setToast({ show: true, isCorrect: false, message: "提交失败，请检查网络后重试。" });
     } finally {
       setSubmitting(false);
     }
   }, [token, exercise, selectedAnswer, judgeAnswer, fillAnswer, code, id, router]);
+
+  const handleRetry = useCallback(() => {
+    setSubmitResult(null);
+    setSelectedAnswer("");
+    setJudgeAnswer(null);
+    setFillAnswer("");
+    setCode(exercise?.starter_code || "");
+  }, [exercise]);
 
   // --- Render ---
 
@@ -228,6 +268,12 @@ export default function ExercisePage() {
         </div>
         <h1 className="mt-2 text-xl font-bold">{exercise.title}</h1>
         <p className="mt-1 text-muted-foreground">{exercise.description}</p>
+        {(completedIds.has(id) || submitResult?.is_correct) && (
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-400">
+            <CheckCircle2 className="h-4 w-4" />
+            已完成
+          </div>
+        )}
       </motion.div>
 
       {/* Exercise Content */}
@@ -313,20 +359,20 @@ export default function ExercisePage() {
               height="300px"
               showBorder={false}
             />
-            <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-2">
-              <div className="flex-1 flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-between gap-2 border-t border-zinc-800 px-4 py-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={stdin}
                   onChange={(e) => setStdin(e.target.value)}
                   placeholder="标准输入 (每行一个 input)"
-                  className="flex-1 bg-zinc-800 text-xs text-zinc-300 px-2 py-1 rounded border border-zinc-700 focus:border-zinc-500 focus:outline-none font-mono"
+                  className="flex-1 sm:flex-none bg-zinc-800 text-xs text-zinc-300 px-2 py-1 rounded border border-zinc-700 focus:border-zinc-500 focus:outline-none font-mono"
                 />
               </div>
               <button
                 onClick={handleRun}
                 disabled={running || !code.trim()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
               >
                 {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                 运行
@@ -385,7 +431,7 @@ export default function ExercisePage() {
 
       {/* Actions */}
       <div className="mt-6 flex items-center gap-3">
-        {!submitResult ? (
+        {!submitResult && (
           <>
             <button
               onClick={handleSubmit}
@@ -405,14 +451,49 @@ export default function ExercisePage() {
               AI 帮忙
             </button>
           </>
-        ) : (
-          <button
-            onClick={() => router.push(`/lesson/${exercise.lesson_id}`)}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            返回课程
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        )}
+
+        {submitResult?.is_correct && (
+          <>
+            <button
+              disabled
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              已完成
+            </button>
+            <button
+              onClick={() => router.push(`/lesson/${exercise.lesson_id}`)}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              返回课程
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </>
+        )}
+
+        {submitResult && !submitResult.is_correct && (
+          <>
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit || submitting}
+              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> 提交中...
+                </span>
+              ) : (
+                "重新提交"
+              )}
+            </button>
+            <button
+              onClick={handleRetry}
+              className="rounded-lg border border-border px-4 py-2.5 text-sm text-muted-foreground hover:bg-muted transition-colors"
+            >
+              再试一次
+            </button>
+          </>
         )}
       </div>
 
@@ -456,6 +537,14 @@ export default function ExercisePage() {
         </motion.div>
       )}
 
+      {/* Toast */}
+      <Toast
+        show={toast.show}
+        isCorrect={toast.isCorrect}
+        message={toast.message}
+        onClose={() => setToast({ show: false, isCorrect: false, message: "" })}
+      />
+
       {/* Exercise navigation */}
       {exerciseIds.length > 1 && (
         <div className="mt-8 flex items-center justify-between">
@@ -467,9 +556,29 @@ export default function ExercisePage() {
             <ArrowLeft className="h-4 w-4" />
             上一题
           </button>
-          <span className="text-xs text-muted-foreground">
-            {currentIndex + 1} / {exerciseIds.length}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {exerciseIds.map((eid, i) => {
+              const isCompleted = completedIds.has(eid) || (eid === id && submitResult?.is_correct);
+              const isCurrent = eid === id;
+              return (
+                <button
+                  key={eid}
+                  onClick={() => router.push(`/exercise/${eid}`)}
+                  className={cn(
+                    "flex items-center justify-center rounded-full transition-all",
+                    isCurrent ? "h-7 w-7 text-xs font-bold" : "h-5 w-5",
+                    isCompleted
+                      ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                      : isCurrent
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  )}
+                >
+                  {isCompleted ? <CheckCircle2 className="h-3.5 w-3.5" /> : isCurrent ? i + 1 : ""}
+                </button>
+              );
+            })}
+          </div>
           <button
             onClick={() => currentIndex < exerciseIds.length - 1 && router.push(`/exercise/${exerciseIds[currentIndex + 1]}`)}
             disabled={currentIndex >= exerciseIds.length - 1}

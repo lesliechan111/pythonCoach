@@ -18,7 +18,7 @@ export function CourseCard({ course, index = 0 }: CourseCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
     >
-      <Link href={`/learn`}>
+      <Link href={`/learn/${course.id}`}>
         <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-6 transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
           {/* Top row */}
           <div className="flex items-start justify-between">
