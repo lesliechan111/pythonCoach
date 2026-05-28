@@ -10,7 +10,7 @@ import { DailyTask } from "@/components/dashboard/DailyTask";
 import { RecentActivity } from "@/components/dashboard/RecentActivity";
 import { CourseCard } from "@/components/ui/CourseCard";
 import { useAuth } from "@/hooks/useAuth";
-import type { DashboardStats } from "@/types";
+import type { DashboardStats, Activity } from "@/types";
 
 interface Course {
   id: number;
@@ -38,6 +38,7 @@ export default function DashboardPage() {
     accuracy_rate: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [continueLessonId, setContinueLessonId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function DashboardPage() {
           if (dashJson.data) {
             setStats(dashJson.data.stats);
             setContinueLessonId(dashJson.data.continue_lesson_id);
+            setActivities(dashJson.data.recent_activities || []);
           }
         }
       } catch (err) {
@@ -141,7 +143,7 @@ export default function DashboardPage() {
           {isAuthenticated && continueLessonId && (
             <DailyTask title={`第 ${continueLessonId} 课`} lessonId={continueLessonId} />
           )}
-          <RecentActivity activities={[]} />
+          <RecentActivity activities={activities} loading={loading} />
         </div>
       </div>
     </div>

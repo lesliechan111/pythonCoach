@@ -59,6 +59,14 @@ export interface DashboardStats {
   accuracy_rate: number;
 }
 
+export interface Activity {
+  id: number;
+  type: "lesson" | "exercise" | "project" | "code";
+  title: string;
+  result?: "success" | "fail";
+  time: string;
+}
+
 export interface CodeRunResult {
   stdout: string;
   stderr: string;

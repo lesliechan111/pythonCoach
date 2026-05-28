@@ -2,6 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session, select, func
+from sqlalchemy import text
 
 from app.database import get_session
 from app.routers.auth import get_current_user
@@ -96,12 +97,57 @@ def get_dashboard(
     if continue_lesson_id > total_lessons:
         continue_lesson_id = None
 
-    recent = session.exec(
-        select(CodeSubmission)
-        .where(CodeSubmission.user_id == uid)
-        .order_by(CodeSubmission.created_at.desc())
-        .limit(5)
-    ).all()
+    activity_rows = session.execute(
+        text("""
+            SELECT 'lesson' AS type,
+                   l.title AS title,
+                   ulp.completed_at AS time,
+                   NULL AS result,
+                   ulp.id + 1000000 AS id
+            FROM user_lesson_progress ulp
+            JOIN lessons l ON l.id = ulp.lesson_id
+            WHERE ulp.user_id = :uid AND ulp.status = 'completed'
+
+            UNION ALL
+
+            SELECT 'exercise' AS type,
+                   e.title AS title,
+                   uea.created_at AS time,
+                   CASE WHEN uea.is_correct THEN 'success' ELSE 'fail' END AS result,
+                   uea.id + 2000000 AS id
+            FROM user_exercise_attempts uea
+            JOIN exercises e ON e.id = uea.exercise_id
+            WHERE uea.user_id = :uid
+
+            UNION ALL
+
+            SELECT 'project' AS type,
+                   p.title AS title,
+                   upp.updated_at AS time,
+                   CASE WHEN upp.status = 'completed' THEN 'success' ELSE NULL END AS result,
+                   upp.id + 3000000 AS id
+            FROM user_project_progress upp
+            JOIN projects p ON p.id = upp.project_id
+            WHERE upp.user_id = :uid AND upp.status IN ('completed', 'in_progress')
+
+            UNION ALL
+
+            SELECT 'code' AS type,
+                   COALESCE(e2.title, pt.title, l2.title, 'Code Run') AS title,
+                   cs.created_at AS time,
+                   CASE WHEN cs.exit_code = 0 THEN 'success' ELSE 'fail' END AS result,
+                   cs.id + 4000000 AS id
+            FROM code_submissions cs
+            LEFT JOIN exercises e2 ON e2.id = cs.exercise_id
+            LEFT JOIN project_tasks pt ON pt.id = cs.project_task_id
+            LEFT JOIN lessons l2 ON l2.id = cs.lesson_id
+            WHERE cs.user_id = :uid
+
+            ORDER BY time DESC
+            LIMIT 10
+        """),
+        {"uid": uid},
+    ).fetchall()
 
     return {
         "data": {
@@ -118,15 +164,15 @@ def get_dashboard(
                 "study_days": study_days_result,
                 "accuracy_rate": accuracy_rate,
             },
-            "recent_submissions": [
+            "recent_activities": [
                 {
-                    "id": s.id,
-                    "code": s.code[:200],
-                    "language": s.language,
-                    "exit_code": s.exit_code,
-                    "created_at": s.created_at.isoformat(),
+                    "id": row.id,
+                    "type": row.type,
+                    "title": row.title,
+                    "result": row.result,
+                    "time": row.time if isinstance(row.time, str) else (row.time.isoformat() if row.time else None),
                 }
-                for s in recent
+                for row in activity_rows
             ],
             "continue_lesson_id": continue_lesson_id,
         }
