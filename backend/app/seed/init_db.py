@@ -11,7 +11,7 @@ from app.models import Course, Lesson, Exercise, Project, ProjectTask
 def seed():
     create_db_and_tables()
 
-    from app.seed.data.courses import COURSE, LESSONS
+    from app.seed.data.courses import COURSE, COURSE_2, LESSONS
     from app.seed.data.exercises import ALL_EXERCISES
     from app.seed.data.grading_updates import (
         apply_exercise_updates,
@@ -29,15 +29,19 @@ def seed():
             print("Database already seeded, skipping.")
             return
 
-        # 1. Create course
+        # 1. Create courses
         course = Course(**COURSE)
-        session.add(course)
+        course_2 = Course(**COURSE_2)
+        session.add_all([course, course_2])
         session.flush()
 
-        # 2. Create lessons
-        for i, lesson_data in enumerate(LESSONS):
+        # 2. Create lessons, assigning to the right course
+        # Lessons 1-20 → beginner course, Lessons 21-50 → advanced course
+        for lesson_data in LESSONS:
+            order_index = lesson_data["order_index"]
+            parent_course = course if order_index <= 20 else course_2
             lesson = Lesson(
-                course_id=course.id,
+                course_id=parent_course.id,
                 objectives=json.dumps(lesson_data["objectives"], ensure_ascii=False),
                 line_by_line_explanation=json.dumps(
                     lesson_data["line_by_line_explanation"], ensure_ascii=False
@@ -60,7 +64,7 @@ def seed():
             session.flush()
 
             # 3. Create exercises for each lesson
-            lesson_exercises = all_exercises.get(i + 1, [])
+            lesson_exercises = all_exercises.get(order_index, [])
             for ex_data in lesson_exercises:
                 exercise = Exercise(
                     lesson_id=lesson.id,
@@ -89,7 +93,7 @@ def seed():
                 )
                 session.add(exercise)
 
-        # 4. Create project
+        # 4. Create projects
         for proj_id, (proj_data, tasks_data) in all_projects.items():
             project = Project(
                 knowledge_points=json.dumps(
