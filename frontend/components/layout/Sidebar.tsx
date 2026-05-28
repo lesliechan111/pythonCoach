@@ -15,9 +15,21 @@ interface SidebarProps {
   lessons: SidebarLesson[];
 }
 
+function computeLocked(lessons: SidebarLesson[]): Set<number> {
+  const sorted = [...lessons].sort((a, b) => a.id - b.id);
+  const locked = new Set<number>();
+  for (let i = 1; i < sorted.length; i++) {
+    if (!sorted[i - 1].is_completed) {
+      locked.add(sorted[i].id);
+    }
+  }
+  return locked;
+}
+
 export function Sidebar({ lessons }: SidebarProps) {
   const params = useParams();
   const currentLessonId = Number(params.id);
+  const lockedIds = computeLocked(lessons);
 
   return (
     <aside className="hidden w-72 shrink-0 border-r border-border bg-card/50 lg:block">
@@ -30,7 +42,7 @@ export function Sidebar({ lessons }: SidebarProps) {
         <nav className="space-y-0.5 p-2">
           {lessons.map((lesson) => {
             const isActive = lesson.id === currentLessonId;
-            const isLocked = lesson.id > 5; // mock
+            const isLocked = lockedIds.has(lesson.id);
 
             return (
               <Link

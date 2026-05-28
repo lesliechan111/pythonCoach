@@ -5,25 +5,58 @@ import { motion } from "framer-motion";
 import { BookOpen, Trophy } from "lucide-react";
 import { LessonCard } from "@/components/learn/LessonCard";
 import { DifficultyBadge } from "@/components/ui/DifficultyBadge";
+import { useAuth } from "@/hooks/useAuth";
 import type { Lesson } from "@/types";
 
 export default function LearnPage() {
+  const { token } = useAuth();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/v1/courses/1");
-        const json = await res.json();
-        if (json.data?.lessons) {
-          setLessons(
-            json.data.lessons.map((l: any) => ({
-              ...l,
-              is_completed: false,
-            }))
-          );
+        const headers: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
+
+        const [courseRes, progressRes] = await Promise.all([
+          fetch("/api/v1/courses/1"),
+          token
+            ? fetch("/api/v1/users/me/progress", { headers })
+            : Promise.resolve(null),
+        ]);
+
+        const courseJson = await courseRes.json();
+        if (!courseJson.data?.lessons) return;
+
+        const completedIds = new Set<number>();
+        if (progressRes) {
+          const progressJson = await progressRes.json();
+          for (const cp of progressJson.data?.course_progress || []) {
+            for (const l of cp.lessons || []) {
+              if (l.status === "completed") completedIds.add(l.lesson_id);
+            }
+          }
         }
+
+        const rawLessons: Lesson[] = courseJson.data.lessons.map((l: any) => ({
+          ...l,
+          is_completed: completedIds.has(l.id),
+        }));
+
+        const firstIncomplete = rawLessons.find((l) => !l.is_completed);
+        const firstIncompleteIndex = firstIncomplete
+          ? rawLessons.indexOf(firstIncomplete)
+          : -1;
+
+        setLessons(
+          rawLessons.map((l, i) => ({
+            ...l,
+            _isLocked: i > 0 && !rawLessons[i - 1].is_completed,
+            _isCurrent: i === firstIncompleteIndex,
+          }))
+        );
       } catch (err) {
         console.error("Failed to fetch lessons:", err);
       } finally {
@@ -31,7 +64,7 @@ export default function LearnPage() {
       }
     }
     load();
-  }, []);
+  }, [token]);
 
   const completedCount = lessons.filter((l) => l.is_completed).length;
   const totalLessons = lessons.length || 20;
@@ -114,7 +147,11 @@ export default function LearnPage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <LessonCard lesson={lesson} />
+                <LessonCard
+                  lesson={lesson}
+                  isLocked={(lesson as any)._isLocked}
+                  isCurrent={(lesson as any)._isCurrent}
+                />
               </motion.div>
             ))}
           </div>

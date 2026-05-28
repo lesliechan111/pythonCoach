@@ -5,11 +5,13 @@ import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { LessonContent } from "@/components/learn/LessonContent";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { useAuth } from "@/hooks/useAuth";
 import type { Lesson } from "@/types";
 
 export default function LessonPage() {
   const params = useParams();
   const id = Number(params.id);
+  const { token } = useAuth();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [allLessons, setAllLessons] = useState<Array<{ id: number; title: string; is_completed: boolean }>>([]);
   const [firstExerciseId, setFirstExerciseId] = useState<number | null>(null);
@@ -18,10 +20,17 @@ export default function LessonPage() {
   useEffect(() => {
     async function loadLesson() {
       try {
-        const [lessonRes, courseRes, exercisesRes] = await Promise.all([
+        const headers: Record<string, string> = token
+          ? { Authorization: `Bearer ${token}` }
+          : {};
+
+        const [lessonRes, courseRes, exercisesRes, progressRes] = await Promise.all([
           fetch(`/api/v1/lessons/${id}`),
           fetch(`/api/v1/courses/1`),
           fetch(`/api/v1/lessons/${id}/exercises`),
+          token
+            ? fetch("/api/v1/users/me/progress", { headers })
+            : Promise.resolve(null),
         ]);
 
         const lessonJson = await lessonRes.json();
@@ -44,17 +53,25 @@ export default function LessonPage() {
 
         const courseJson = await courseRes.json();
         if (courseJson.data?.lessons) {
+          const completedIds = new Set<number>();
+          if (progressRes) {
+            const progressJson = await progressRes.json();
+            for (const cp of progressJson.data?.course_progress || []) {
+              for (const l of cp.lessons || []) {
+                if (l.status === "completed") completedIds.add(l.lesson_id);
+              }
+            }
+          }
           setAllLessons(
             courseJson.data.lessons.map((l: any) => ({
               id: l.id,
               title: l.title,
-              is_completed: false,
+              is_completed: completedIds.has(l.id),
             }))
           );
         }
 
         // Record lesson progress
-        const token = localStorage.getItem("auth_token");
         if (token) {
           fetch(`/api/v1/lessons/${id}/complete`, {
             method: "POST",
@@ -68,7 +85,7 @@ export default function LessonPage() {
       }
     }
     loadLesson();
-  }, [id]);
+  }, [id, token]);
 
   if (loading) {
     return (

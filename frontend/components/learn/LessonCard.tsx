@@ -7,11 +7,11 @@ import { cn } from "@/lib/utils";
 
 interface LessonCardProps {
   lesson: Lesson;
+  isLocked?: boolean;
+  isCurrent?: boolean;
 }
 
-export function LessonCard({ lesson }: LessonCardProps) {
-  const isLocked = lesson.order_index > 5; // mock logic
-  const isCurrent = lesson.order_index === 4;
+export function LessonCard({ lesson, isLocked = false, isCurrent = false }: LessonCardProps) {
 
   let statusIcon;
   let statusClass;
