@@ -44,6 +44,7 @@ export default function LessonPage() {
           next_lesson_id: null, // set below from course sidebar data
         });
 
+        const exercisesJson = await exercisesRes.json();
         if (exercisesJson.data?.length > 0) {
           setFirstExerciseId(exercisesJson.data[0].id);
         }
