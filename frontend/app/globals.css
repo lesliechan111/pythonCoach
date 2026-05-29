@@ -100,6 +100,27 @@
   .hover-lift {
     @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg;
   }
+
+  .shimmer-bg {
+    @apply bg-gradient-to-r from-muted/30 via-muted/50 to-muted/30 bg-[length:200%_100%];
+    animation: shimmer 2s linear infinite;
+  }
+
+  .btn-ripple {
+    @apply relative overflow-hidden;
+  }
+  .btn-ripple::after {
+    content: "";
+    @apply absolute inset-0 rounded-lg opacity-0;
+    background: radial-gradient(circle, hsl(var(--primary-foreground) / 0.3) 10%, transparent 10%);
+    transform: scale(10);
+    transition: transform 0.4s, opacity 0.4s;
+  }
+  .btn-ripple:active::after {
+    transform: scale(0);
+    opacity: 1;
+    transition: 0s;
+  }
 }
 
 @layer utilities {

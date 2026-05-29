@@ -49,6 +49,27 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      keyframes: {
+        shimmer: {
+          "0%": { backgroundPosition: "200% 0" },
+          "100%": { backgroundPosition: "-200% 0" },
+        },
+        "orb-drift-1": {
+          "0%, 100%": { transform: "translate(0, 0) rotate(0deg)" },
+          "33%": { transform: "translate(30px, -20px) rotate(15deg)" },
+          "66%": { transform: "translate(-20px, 10px) rotate(-10deg)" },
+        },
+        "orb-drift-2": {
+          "0%, 100%": { transform: "translate(0, 0) rotate(0deg)" },
+          "33%": { transform: "translate(-25px, 15px) rotate(-12deg)" },
+          "66%": { transform: "translate(20px, -10px) rotate(10deg)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 2s linear infinite",
+        "orb-drift-1": "orb-drift-1 18s ease-in-out infinite",
+        "orb-drift-2": "orb-drift-2 24s ease-in-out infinite",
+      },
     },
   },
   plugins: [],
