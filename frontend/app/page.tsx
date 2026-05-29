@@ -23,6 +23,24 @@ interface Course {
   progress_percent: number;
 }
 
+function AnimateBlock({
+  delay,
+  children,
+}: {
+  delay: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.35, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 export default function DashboardPage() {
   const { user, token } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -94,41 +112,60 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 pb-12">
-      <WelcomeBanner username={user?.username} studyDays={stats.study_days} />
+      <AnimateBlock delay={0}>
+        <WelcomeBanner username={user?.username} studyDays={stats.study_days} />
+      </AnimateBlock>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {isAuthenticated && continueLessonId && (
-            <ContinueLearning
-              lessonTitle={`第 ${continueLessonId} 课`}
-              lessonId={continueLessonId}
-              courseTitle="Python 零基础入门"
-              progressPercent={lessonPercent}
-            />
-          )}
+          <AnimateBlock delay={0.1}>
+            {isAuthenticated && continueLessonId && (
+              <ContinueLearning
+                lessonTitle={`第 ${continueLessonId} 课`}
+                lessonId={continueLessonId}
+                courseTitle="Python 零基础入门"
+                progressPercent={lessonPercent}
+              />
+            )}
+          </AnimateBlock>
 
           {isAuthenticated ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <ProgressCard percent={lessonPercent} completed={stats.completed_lessons} total={stats.total_lessons} label="课程" />
-                <ProgressCard percent={exercisePercent} completed={stats.completed_exercises} total={stats.total_exercises} label="题目" />
-                <ProgressCard percent={projectPercent} completed={stats.completed_projects} total={stats.total_projects} label="项目" />
-              </div>
-              <StatsGrid stats={stats} />
+              <AnimateBlock delay={0.2}>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <ProgressCard percent={lessonPercent} completed={stats.completed_lessons} total={stats.total_lessons} label="课程" />
+                  <ProgressCard percent={exercisePercent} completed={stats.completed_exercises} total={stats.total_exercises} label="题目" />
+                  <ProgressCard percent={projectPercent} completed={stats.completed_projects} total={stats.total_projects} label="项目" />
+                </div>
+              </AnimateBlock>
+              <AnimateBlock delay={0.35}>
+                <StatsGrid stats={stats} />
+              </AnimateBlock>
             </>
           ) : (
-            <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-cyan-500/5 p-8 text-center">
-              <h2 className="text-lg font-semibold">开始你的 Python 学习之旅</h2>
-              <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-                注册账号后可以追踪学习进度、记录错题、完成项目实战。每天进步一点点！
-              </p>
-            </div>
+            <AnimateBlock delay={0.1}>
+              <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-cyan-500/5 p-8 text-center">
+                <h2 className="text-lg font-semibold">开始你的 Python 学习之旅</h2>
+                <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+                  注册账号后可以追踪学习进度、记录错题、完成项目实战。每天进步一点点！
+                </p>
+              </div>
+            </AnimateBlock>
           )}
 
-          <div>
+          <AnimateBlock delay={0.4}>
             <h2 className="mb-4 text-lg font-semibold">我的课程</h2>
             {loading ? (
-              <p className="text-sm text-muted-foreground">加载中...</p>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="rounded-2xl border border-border bg-card p-6 space-y-3">
+                    <div className="h-12 w-12 rounded-xl shimmer-bg" />
+                    <div className="h-5 w-3/4 rounded shimmer-bg" />
+                    <div className="h-4 w-full rounded shimmer-bg" />
+                    <div className="h-3 w-1/2 rounded shimmer-bg" />
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {courses.map((course, i) => (
@@ -136,14 +173,18 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-          </div>
+          </AnimateBlock>
         </div>
 
         <div className="space-y-6">
-          {isAuthenticated && continueLessonId && (
-            <DailyTask title={`第 ${continueLessonId} 课`} lessonId={continueLessonId} />
-          )}
-          <RecentActivity activities={activities} loading={loading} />
+          <AnimateBlock delay={0.15}>
+            {isAuthenticated && continueLessonId && (
+              <DailyTask title={`第 ${continueLessonId} 课`} lessonId={continueLessonId} />
+            )}
+          </AnimateBlock>
+          <AnimateBlock delay={0.25}>
+            <RecentActivity activities={activities} loading={loading} />
+          </AnimateBlock>
         </div>
       </div>
     </div>
